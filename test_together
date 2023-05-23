@@ -29,16 +29,28 @@ from email.header import Header
 count = 0
 Update_Cascade_EmailScheduleState = []
 cont_errorEmail = 0
+PID_IsRepeat = []
+p = re.compile(r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)") #正則運算Email
+recipient_file = open('/home/survey/sql_file/SQL_config.txt', 'r')
+for ss in recipient_file:
+    line_list = re.split(",", ss)
+    if "gsdb01p_ap" in line_list:
+        which_AWS = "mastar"
+    elif "gsdb01t_ap" in line_list:
+        which_AWS = "Concat_UAT"
 
 def mssql_conn():
-    MSSQL_CONN = pymssql.connect(host='localhost', server='SZS\SQLEXPRESS', port='1434', user='sa',
-                                 password='reallyStrongPwd123', database='event_gosurvey', charset='cp936')
+    recipient_file = open('/home/survey/sql_file/SQL_config.txt', 'r')
+    for ss in recipient_file:
+        line_list = re.split(",", ss)
+    MSSQL_CONN = pymssql.connect(host=line_list[0], server='SZS\SQLEXPRESS', port=line_list[1], user=line_list[2],
+                                 password=line_list[3], database=line_list[4])
     return MSSQL_CONN
 
 
 def check_host_availability(host, port):
     try:
-        with socket.create_connection((host, port), timeout=5):
+        with smtplib.SMTP(host, port, timeout=5):
             return True
     except (socket.timeout, ConnectionRefusedError):
         return False
@@ -61,22 +73,8 @@ def send_async_email(Cascade_Project_Subject, sender, PID, CustomPID, Name, Casc
     # mail_host = "10.10.18.44"  # 设置服务器
     mail_host = ""
     if which_task == "task1":
-        if which_AWS == "mastar":
-            host_list = ["10.97.2.123", "10.10.13.20"]
-            port = 2
-            for host in host_list:
-                if check_host_availability(host, port):
-                    print(f'{host}:{port} is reachable.')
-                else:
-                    print(f'{host}:{port} is not reachable.')
-                    host_list.remove(host)
-            print(host_list)
-
-            mail_host = random.choice(host_list)
-        if which_AWS == "Concat_UAT":
-            mail_host = random.choice(host_list)
-    elif which_task == "task2":
-        host_list = ["10.10.13.2", "10.10.13.22"]
+        # host_list = ["10.97.2.123", "10.10.13.20"]
+        host_list = ["10.10.17.41", "10.10.17.42"]
         port = 25
         for host in host_list:
             if check_host_availability(host, port):
@@ -85,10 +83,41 @@ def send_async_email(Cascade_Project_Subject, sender, PID, CustomPID, Name, Casc
                 print(f'{host}:{port} is not reachable.')
                 host_list.remove(host)
         print(host_list)
-        if which_AWS == "mastar":
-            mail_host = random.choice(host_list)
-        if which_AWS == "Concat_UAT":
-            mail_host = random.choice(host_list)
+        if len(host_list) == 0:
+            print("task1切換成10.10.13.2", "10.10.13.22")
+            # host_list = ["10.10.13.2", "10.10.13.22"]
+            host_list = ["10.10.17.43", "10.10.17.44"]
+            port = 25
+            for host in host_list:
+                if check_host_availability(host, port):
+                    print(f'{host}:{port} is reachable.')
+                else:
+                    print(f'{host}:{port} is not reachable.')
+        mail_host = random.choice(host_list)
+    elif which_task == "task2":
+        # host_list = ["10.10.13.2", "10.10.13.22"]
+        host_list = ["10.10.18.41", "10.10.18.42"]
+        port = 25
+        for host in host_list:
+            if check_host_availability(host, port):
+                print(f'{host}:{port} is reachable.')
+            else:
+                print(f'{host}:{port} is not reachable.')
+                host_list.remove(host)
+        print(host_list)
+        if len(host_list) == 0:
+            print("task2切換成10.97.2.123", "10.10.13.20")
+            # host_list = ["10.97.2.123", "10.10.13.20"]
+            host_list = ["10.10.18.43", "10.10.18.44"]
+            port = 25
+            for host in host_list:
+                if check_host_availability(host, port):
+                    print(f'{host}:{port} is reachable.')
+                else:
+                    print(f'{host}:{port} is not reachable.')
+        mail_host = random.choice(host_list)
+
+
     # mail_user = "gosurvey@gosurvey.com.tw"  # 用户名
     # mail_pass = "XXXXXX"  # 密碼
     print(User_email)
@@ -156,6 +185,7 @@ def send_async_email(Cascade_Project_Subject, sender, PID, CustomPID, Name, Casc
 
 
 async def task1(Cascade_Project_No, Cascade_Send_Data_No):
+    global PID_IsRepeat
     print("Task 1 is running...")
     print(Cascade_Send_Data_No)
 
@@ -202,9 +232,7 @@ async def task1(Cascade_Project_No, Cascade_Send_Data_No):
                                 left join Cascade_CustomPID_List c on c.Cascade_CustomPID_List_No = a.Cascade_CustomPID_List_No 
                                 where a.Cascade_Project_No = %s  and a.Cascade_Send_Data_No = %s and a.SendingStatus in (0) and c.Cascade_CustomPID_List_No is not Null
                                 and a.Shunt_No = 0 and b.Cascade_CMS_List_EMail not in (
-                                select EMail from  Survey.dbo.CMS_List_BlockGS where EMail = b.Cascade_CMS_List_EMail 
-                                union all 
-                                select EMail from  Survey.dbo.CMS_List_BlockKS where EMail = b.Cascade_CMS_List_EMail
+                                    select EMail from Black_List where EMail = b.Cascade_CMS_List_EMail 
                                 )
                                                                                         """
     cur.execute(insert_User_Info, (Cascade_Project_No, Cascade_Send_Data_No))
@@ -231,9 +259,7 @@ async def task1(Cascade_Project_No, Cascade_Send_Data_No):
                                 left join Cascade_CustomPID_List c on c.Cascade_CustomPID_List_No = a.Cascade_CustomPID_List_No 
                                 where a.Cascade_Project_No = %s  and a.Cascade_Send_Data_No = %s and a.SendingStatus in (0) and c.Cascade_CustomPID_List_No is not Null
                                 and a.Shunt_No = 0 and b.Cascade_CMS_List_EMail in (
-                                select EMail from  Survey.dbo.CMS_List_BlockGS where EMail = b.Cascade_CMS_List_EMail
-                                union all
-                                select EMail from  Survey.dbo.CMS_List_BlockKS where EMail = b.Cascade_CMS_List_EMail
+                                select EMail from  Black_List where EMail = b.Cascade_CMS_List_EMail
                                 )"""
     print(sql3_)
     MYSQL_CONN = mssql_conn()
@@ -261,7 +287,6 @@ async def task1(Cascade_Project_No, Cascade_Send_Data_No):
     Update_Cascade_CustomPID_List = []
     Chaeck_Email_Repeat = []
     Chaeck_PID_Repeat = []
-    PID_IsRepeat = []
 
     for idx in range(0, len(Cascade_CMS_List_Data)):
         print(Cascade_CMS_List_Data[idx])
@@ -338,8 +363,10 @@ async def task1(Cascade_Project_No, Cascade_Send_Data_No):
 
 
 async def task2(Cascade_Project_No, Cascade_Send_Data_No):
+    global PID_IsRepeat
     print("Task 2 is running...")
     print(Cascade_Send_Data_No)
+
 
     # 查出Cascade_Project_No的資料
     MYSQL_CONN = mssql_conn()
@@ -384,9 +411,7 @@ async def task2(Cascade_Project_No, Cascade_Send_Data_No):
                                 left join Cascade_CustomPID_List c on c.Cascade_CustomPID_List_No = a.Cascade_CustomPID_List_No 
                                 where a.Cascade_Project_No = %s  and a.Cascade_Send_Data_No = %s and a.SendingStatus in (0) and c.Cascade_CustomPID_List_No is not Null
                                 and a.Shunt_No = 1 and b.Cascade_CMS_List_EMail not in (
-                                select EMail from  Survey.dbo.CMS_List_BlockGS where EMail = b.Cascade_CMS_List_EMail 
-                                union all 
-                                select EMail from  Survey.dbo.CMS_List_BlockKS where EMail = b.Cascade_CMS_List_EMail
+                                select EMail from  Black_List where EMail = b.Cascade_CMS_List_EMail 
                                 )
                                                                                         """
     cur.execute(insert_User_Info, (Cascade_Project_No, Cascade_Send_Data_No))
@@ -413,9 +438,7 @@ async def task2(Cascade_Project_No, Cascade_Send_Data_No):
                                 left join Cascade_CustomPID_List c on c.Cascade_CustomPID_List_No = a.Cascade_CustomPID_List_No 
                                 where a.Cascade_Project_No = %s  and a.Cascade_Send_Data_No = %s and a.SendingStatus in (0) and c.Cascade_CustomPID_List_No is not Null
                                 and a.Shunt_No = 1 and b.Cascade_CMS_List_EMail in (
-                                select EMail from  Survey.dbo.CMS_List_BlockGS where EMail = b.Cascade_CMS_List_EMail
-                                union all
-                                select EMail from  Survey.dbo.CMS_List_BlockKS where EMail = b.Cascade_CMS_List_EMail
+                                select EMail from  Black_List where EMail = b.Cascade_CMS_List_EMail
                                 )"""
 
     MYSQL_CONN = mssql_conn()
@@ -443,7 +466,6 @@ async def task2(Cascade_Project_No, Cascade_Send_Data_No):
     Update_Cascade_CustomPID_List = []
     Chaeck_Email_Repeat = []
     Chaeck_PID_Repeat = []
-    PID_IsRepeat = []
     for idx in range(0, len(Cascade_CMS_List_Data)):
 
         Project_No = Cascade_CMS_List_Data[idx][0]
@@ -514,6 +536,7 @@ async def task2(Cascade_Project_No, Cascade_Send_Data_No):
 
 
 async def main():
+    global PID_IsRepeat
     MYSQL_CONN = mssql_conn()
     cur = MYSQL_CONN.cursor()
     query_script = """
